@@ -28,6 +28,17 @@ class Expense {
     );
   }
 
+  factory Expense.fromFirestore(Map<String, dynamic> data, String id) {
+    return Expense(
+      id: id,
+      uid: data['uid'],
+      title: data['title'],
+      amount: data['amount'],
+      timestamp: (data['timestamp'] as Timestamp).toDate(),
+      category: data['category'],
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

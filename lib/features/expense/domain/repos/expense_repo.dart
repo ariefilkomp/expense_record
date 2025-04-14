@@ -4,5 +4,7 @@ abstract class ExpenseRepo {
   Future<void> addExpense(Expense expense);
   Future<void> updateExpense(Expense expense);
   Future<void> deleteExpense(Expense expense);
-  Stream<List<Expense>> getExpenses();
+  Future<List<Expense>> fetchExpenses({required int limit});
+  void resetPagination();
+  Future<void> fetchSummary(String summaryId);
 }
