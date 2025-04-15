@@ -247,10 +247,10 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         centerTitle: true,
         title: Text(
-          'Catatan Pengeluaran',
+          'Spendee - Catatan Pengeluaran',
           style: TextStyle(
             color: Theme.of(context).colorScheme.primary,
-            fontSize: 18,
+            fontSize: 14,
           ),
         ),
       ),
