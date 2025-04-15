@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:expense_record/features/expense/domain/entities/expense.dart';
 import 'package:expense_record/features/expense/domain/repos/expense_repo.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:intl/intl.dart' show DateFormat;
 
 class FirebaseExpenseRepo implements ExpenseRepo {
@@ -12,54 +13,53 @@ class FirebaseExpenseRepo implements ExpenseRepo {
   @override
   Future<void> addExpense(Expense expense) async {
     try {
-      await firestore
+      final firestore = FirebaseFirestore.instance;
+      final formattedMonth = DateFormat('yyyyMM').format(expense.timestamp);
+
+      final expenseRef = firestore
           .collection('users')
           .doc(expense.uid)
           .collection('expenses')
-          .doc(expense.id)
-          .set(expense.toJson());
+          .doc(expense.id);
 
-      // fetch user document from firestore
-      String formattedMonth = DateFormat('yyyyMM').format(expense.timestamp);
-      DocumentSnapshot summaries =
-          await firestore
-              .collection('users')
-              .doc(expense.uid)
-              .collection('summaries')
-              .doc(formattedMonth)
-              .get();
+      final summaryRef = firestore
+          .collection('users')
+          .doc(expense.uid)
+          .collection('summaries')
+          .doc(formattedMonth);
 
-      String snakeCaseCategory = expense.category
+      final snakeCaseCategory = expense.category
           .toLowerCase()
           .replaceAll(RegExp(r'[^\w\s]'), '')
           .replaceAll(RegExp(r'\s+'), '_');
 
-      if (summaries.exists) {
-        Map<String, dynamic> data = summaries.data() as Map<String, dynamic>;
-        if (data[snakeCaseCategory] == null) {
-          data[snakeCaseCategory] = expense.amount;
+      await firestore.runTransaction((transaction) async {
+        // Ambil summary bulan tersebut
+        final summarySnapshot = await transaction.get(summaryRef);
+
+        Map<String, dynamic> updatedSummary = {};
+
+        if (summarySnapshot.exists) {
+          final currentData = summarySnapshot.data() as Map<String, dynamic>;
+          final currentValue = (currentData[snakeCaseCategory] ?? 0) as num;
+
+          updatedSummary = {
+            ...currentData,
+            snakeCaseCategory: currentValue + expense.amount,
+          };
         } else {
-          data[snakeCaseCategory] += expense.amount;
+          updatedSummary = {snakeCaseCategory: expense.amount};
         }
 
-        firestore
-            .collection('users')
-            .doc(expense.uid)
-            .collection('summaries')
-            .doc(formattedMonth)
-            .update(data);
-      } else {
-        Map<String, dynamic> data = {};
-        data[snakeCaseCategory] = expense.amount;
-        firestore
-            .collection('users')
-            .doc(expense.uid)
-            .collection('summaries')
-            .doc(formattedMonth)
-            .set(data);
-      }
+        // Simpan expense baru
+        transaction.set(expenseRef, expense.toJson());
+        transaction.set(summaryRef, updatedSummary);
+      });
     } catch (e) {
-      print(e);
+      if (kDebugMode) {
+        print('Gagal menambahkan expense: $e');
+      }
+      rethrow;
     }
   }
 
@@ -113,7 +113,9 @@ class FirebaseExpenseRepo implements ExpenseRepo {
           .doc(expense.id)
           .update(expense.toJson());
     } catch (e) {
-      print(e);
+      if (kDebugMode) {
+        print(e);
+      }
     }
   }
 
@@ -165,7 +167,9 @@ class FirebaseExpenseRepo implements ExpenseRepo {
           .doc(expense.id)
           .delete();
     } catch (e) {
-      print(e);
+      if (kDebugMode) {
+        print(e);
+      }
     }
   }
 
@@ -198,16 +202,5 @@ class FirebaseExpenseRepo implements ExpenseRepo {
   @override
   void resetPagination() {
     lastDoc = null;
-  }
-
-  @override
-  Future<void> fetchSummary(String summaryId) async {
-    DocumentSnapshot summaries =
-        await firestore
-            .collection('users')
-            .doc(firebaseAuth.currentUser!.uid)
-            .collection('summaries')
-            .doc(summaryId)
-            .get();
   }
 }

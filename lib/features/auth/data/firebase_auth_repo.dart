@@ -2,73 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:expense_record/features/auth/domain/entities/app_user.dart';
 import 'package:expense_record/features/auth/domain/repos/auth_repo.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:google_sign_in/google_sign_in.dart';
 
 class FirebaseAuthRepo implements AuthRepo {
   final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
   final FirebaseFirestore firebaseFirestore = FirebaseFirestore.instance;
-  @override
-  Future<AppUser?> loginWithEmailPassword({
-    required String email,
-    required String password,
-  }) async {
-    try {
-      UserCredential userCredential = await firebaseAuth
-          .signInWithEmailAndPassword(email: email, password: password);
-      // fetch user document from firestore
-      DocumentSnapshot userDoc =
-          await firebaseFirestore
-              .collection('users')
-              .doc(userCredential.user!.uid)
-              .get();
-      // save user data in firestore
-      return AppUser(
-        uid: userCredential.user!.uid,
-        email: userCredential.user!.email!,
-        name: getValue<String>(userDoc, 'name', ''),
-      );
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found') {
-        print('No user found for that email.');
-      } else if (e.code == 'wrong-password') {
-        print('Wrong password provided for that user.');
-      }
-    }
-    return null;
-  }
-
-  @override
-  Future<AppUser?> registerWithEmailPassword({
-    required String name,
-    required String email,
-    required String password,
-  }) async {
-    try {
-      UserCredential userCredential = await firebaseAuth
-          .createUserWithEmailAndPassword(email: email, password: password);
-      AppUser user = AppUser(
-        uid: userCredential.user!.uid,
-        email: email,
-        name: name,
-      );
-
-      // save user data in firestore
-      await firebaseFirestore
-          .collection('users')
-          .doc(user.uid)
-          .set(user.toJson());
-
-      return user;
-    } on FirebaseAuthException catch (e) {
-      print(e.code);
-      if (e.code == 'user-not-found') {
-        print('No user found for that email.');
-      } else if (e.code == 'wrong-password') {
-        print('Wrong password provided for that user.');
-      }
-    }
-    return null;
-  }
 
   @override
   Future<AppUser?> getCurrentUser() async {
@@ -115,10 +54,14 @@ class FirebaseAuthRepo implements AuthRepo {
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case "operation-not-allowed":
-          print("Anonymous auth hasn't been enabled for this project.");
+          if (kDebugMode) {
+            print("Anonymous auth hasn't been enabled for this project.");
+          }
           break;
         default:
-          print("Unknown error.");
+          if (kDebugMode) {
+            print("Unknown error.");
+          }
       }
     }
     return null;
@@ -148,8 +91,9 @@ class FirebaseAuthRepo implements AuthRepo {
         isAnonymous: userCredential.user!.isAnonymous,
       );
     } catch (e) {
-      print('================== ERRORR ===================');
-      print(e);
+      if (kDebugMode) {
+        print(e);
+      }
     }
     return null;
   }
@@ -160,7 +104,7 @@ class FirebaseAuthRepo implements AuthRepo {
       // 1. Sign in with Google
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) {
-        print("Login Google dibatalkan oleh user.");
+        //print("Login Google dibatalkan oleh user.");
         return null;
       }
 
@@ -198,15 +142,23 @@ class FirebaseAuthRepo implements AuthRepo {
       );
     } on FirebaseAuthException catch (e) {
       if (e.code == 'credential-already-in-use') {
-        print("Akun Google ini sudah digunakan di akun lain.");
+        if (kDebugMode) {
+          print("Akun Google ini sudah digunakan di akun lain.");
+        }
       } else if (e.code == 'provider-already-linked') {
-        print("Akun sudah terhubung dengan Google sebelumnya.");
+        if (kDebugMode) {
+          print("Akun sudah terhubung dengan Google sebelumnya.");
+        }
       } else {
-        print("Error saat link akun: ${e.message}");
+        if (kDebugMode) {
+          print("Error saat link akun: ${e.message}");
+        }
       }
       return null;
     } catch (e) {
-      print("Error umum: $e");
+      if (kDebugMode) {
+        print("Error umum: $e");
+      }
       return null;
     }
   }

@@ -13,24 +13,6 @@ class _LoginPageState extends State<LoginPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
-  void login() {
-    final String email = emailController.text;
-    final String password = passwordController.text;
-
-    // auth cubit
-    final authCubit = context.read<AuthCubit>();
-
-    if (email.isNotEmpty && password.isNotEmpty) {
-      print(email);
-      print(password);
-      authCubit.login(email: email, password: password);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill out all the fields')),
-      );
-    }
-  }
-
   void loginAnonymously() {
     final authCubit = context.read<AuthCubit>();
     authCubit.loginAnonymously();

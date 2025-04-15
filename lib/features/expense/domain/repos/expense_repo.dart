@@ -6,5 +6,4 @@ abstract class ExpenseRepo {
   Future<void> deleteExpense(Expense expense);
   Future<List<Expense>> fetchExpenses({required int limit});
   void resetPagination();
-  Future<void> fetchSummary(String summaryId);
 }

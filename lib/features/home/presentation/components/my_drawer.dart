@@ -28,7 +28,7 @@ class MyDrawer extends StatelessWidget {
                     placeholder:
                         (context, url) => const CircularProgressIndicator(),
                     errorWidget:
-                        (context, url, error) => const Icon(Icons.person),
+                        (context, url, error) => const Icon(Icons.broken_image),
                     imageBuilder:
                         (context, imageProvider) => Container(
                           height: 80,

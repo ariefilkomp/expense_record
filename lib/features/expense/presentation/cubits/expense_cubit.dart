@@ -13,14 +13,13 @@ class ExpenseCubit extends Cubit<ExpenseStates> {
   ExpenseCubit({required this.expenseRepo, this.limit = 10})
     : super(ExpenseInitial());
 
-  void addExpense(Expense expense) {
+  Future<void> addExpense(Expense expense) {
     try {
       expenseRepo.addExpense(expense);
-      addExpenseOptimistically(expense);
     } catch (e) {
-      print(e);
       emit(ExpenseError(message: e.toString()));
     }
+    return Future.value(null);
   }
 
   get expenses => _expenses;
@@ -65,6 +64,14 @@ class ExpenseCubit extends Cubit<ExpenseStates> {
       currentExpenses.insert(0, expense); // masukkan ke atas
 
       emit(ExpenseLoaded(expenses: currentExpenses, hasReachedEnd: false));
+    }
+  }
+
+  Future<void> deleteExpense(Expense expense) async {
+    try {
+      await expenseRepo.deleteExpense(expense);
+    } catch (e) {
+      emit(ExpenseError(message: e.toString()));
     }
   }
 }

@@ -3,6 +3,9 @@ import 'package:expense_record/features/expense/domain/entities/expense.dart';
 import 'package:expense_record/features/expense/presentation/cubits/expense_cubit.dart';
 import 'package:expense_record/features/expense/presentation/cubits/expense_states.dart';
 import 'package:expense_record/features/home/presentation/components/my_drawer.dart';
+import 'package:expense_record/features/summary/presentation/components/summary_pie_chart.dart';
+import 'package:expense_record/features/summary/presentation/cubits/summary_cubit.dart';
+import 'package:expense_record/features/summary/presentation/cubits/summary_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_datetime_picker_plus/flutter_datetime_picker_plus.dart'
@@ -27,7 +30,25 @@ class _HomePageState extends State<HomePage> {
     void addExpense() async {
       final expenseCubit = context.read<ExpenseCubit>();
       final authCubit = context.read<AuthCubit>();
+      final summaryCubit = context.read<SummaryCubit>();
       final uuid = Uuid();
+
+      if (amountController.text.isEmpty ||
+          descriptionController.text.isEmpty ||
+          selectedDate == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Harap isi semua field')));
+        return;
+      }
+
+      final amount = double.tryParse(amountController.text);
+      if (amount == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Format angka tidak valid')));
+        return;
+      }
 
       final newExpense = Expense(
         id: uuid.v4(),
@@ -50,9 +71,14 @@ class _HomePageState extends State<HomePage> {
       });
 
       try {
-        expenseCubit.addExpense(newExpense);
-        expenseCubit.fetchExpenses(isFirstFetch: true);
+        await expenseCubit.addExpense(newExpense);
+        //expenseCubit.fetchExpenses(isFirstFetch: true);
+        DateTime now = DateTime.now();
+        String formattedMonth = DateFormat('yyyyMM').format(now);
+        await Future.delayed(Duration(milliseconds: 1500));
+        summaryCubit.fetchSummary(formattedMonth);
       } catch (e) {
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal menyimpan: ${e.toString()}')),
         );
@@ -177,9 +203,13 @@ class _HomePageState extends State<HomePage> {
 
   late ScrollController _scrollController;
 
-  void firstFetch() async {
+  Future<void> firstFetch() async {
     final expenseCubit = context.read<ExpenseCubit>();
+    final summaryCubit = context.read<SummaryCubit>();
     expenseCubit.fetchExpenses(isFirstFetch: true);
+    DateTime now = DateTime.now();
+    String formattedMonth = DateFormat('yyyyMM').format(now);
+    summaryCubit.fetchSummary(formattedMonth);
   }
 
   @override
@@ -188,6 +218,14 @@ class _HomePageState extends State<HomePage> {
     firstFetch();
 
     _scrollController = ScrollController()..addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    amountController.dispose();
+    descriptionController.dispose();
+    _scrollController.dispose();
   }
 
   void _onScroll() {
@@ -219,53 +257,141 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: IconButton(
         iconSize: 40,
         onPressed: addExpenseDialog,
-        icon: Icon(Icons.add_circle_outline),
+        icon: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+          ),
+          child: Icon(Icons.add_circle_outline),
+        ),
         color: Theme.of(context).colorScheme.primary,
       ),
-      body: BlocBuilder<ExpenseCubit, ExpenseStates>(
-        builder: (context, state) {
-          print(state);
-          if (state is ExpenseInitial || state is ExpenseLoading) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (state is ExpenseError) {
-            return Center(child: Text(state.message));
-          } else if (state is ExpenseLoaded) {
-            if (state.expenses.isEmpty) {
-              return const Center(child: Text('Belum ada pengeluaran'));
-            }
-
-            return ListView.builder(
-              controller: _scrollController,
-              itemCount: state.expenses.length + (state.hasReachedEnd ? 0 : 1),
-              itemBuilder: (context, index) {
-                if (index < state.expenses.length) {
-                  final exp = state.expenses[index];
-                  return ListTile(
-                    title: Text(exp.title),
-                    subtitle: Text(
-                      NumberFormat.currency(
-                        locale: 'id_ID',
-                        symbol: 'Rp ',
-                        decimalDigits: 0,
-                      ).format(exp.amount),
-                    ),
-                    trailing: Text(
-                      "${exp.timestamp.day}/${exp.timestamp.month}/${exp.timestamp.year}",
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  );
-                } else {
-                  return const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
+      body: RefreshIndicator(
+        onRefresh: firstFetch,
+        child: Column(
+          children: [
+            BlocBuilder<SummaryCubit, SummaryState>(
+              builder: (context, state) {
+                if (state is SummaryInitial || state is SummaryLoading) {
+                  return const CircularProgressIndicator();
                 }
-              },
-            );
-          }
 
-          return const SizedBox.shrink();
-        },
+                if (state is SummaryLoaded) {
+                  if (state.summaries == null) {
+                    return const Center(child: Text('Belum ada pengeluaran'));
+                  } else {
+                    return SizedBox(
+                      height: 250,
+                      child: SummaryPieChart(data: state.summaries!),
+                    );
+                  }
+                }
+
+                return Container();
+              },
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: BlocBuilder<ExpenseCubit, ExpenseStates>(
+                builder: (context, state) {
+                  final expenseCubit = context.read<ExpenseCubit>();
+                  final summaryCubit = context.read<SummaryCubit>();
+                  if (state is ExpenseInitial || state is ExpenseLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  } else if (state is ExpenseError) {
+                    return Center(child: Text(state.message));
+                  } else if (state is ExpenseLoaded) {
+                    if (state.expenses.isEmpty) {
+                      return const Center(child: Text('Belum ada pengeluaran'));
+                    }
+
+                    return ListView.builder(
+                      controller: _scrollController,
+                      itemCount:
+                          state.expenses.length + (state.hasReachedEnd ? 0 : 1),
+                      itemBuilder: (context, index) {
+                        if (index < state.expenses.length) {
+                          final exp = state.expenses[index];
+                          return Dismissible(
+                            key: Key(exp.id), // wajib: unik untuk tiap item
+                            direction:
+                                DismissDirection
+                                    .endToStart, // geser dari kanan ke kiri
+                            background: Container(
+                              color: Colors.red,
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              child: const Icon(
+                                Icons.delete,
+                                color: Colors.white,
+                              ),
+                            ),
+                            onDismissed: (direction) async {
+                              setState(() {
+                                state.expenses.removeAt(index);
+                              });
+
+                              await expenseCubit.deleteExpense(exp);
+
+                              DateTime now = DateTime.now();
+                              String formattedMonth = DateFormat(
+                                'yyyyMM',
+                              ).format(now);
+                              summaryCubit.fetchSummary(formattedMonth);
+
+                              // ignore: use_build_context_synchronously
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('${exp.title} dihapus')),
+                              );
+                            },
+                            child: ListTile(
+                              title: Text(exp.title),
+                              subtitle: Row(
+                                children: [
+                                  Text(
+                                    NumberFormat.currency(
+                                      locale: 'id_ID',
+                                      symbol: 'Rp ',
+                                      decimalDigits: 0,
+                                    ).format(exp.amount),
+                                  ),
+                                  SizedBox(width: 10),
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.purple.shade100,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(exp.category),
+                                  ),
+                                ],
+                              ),
+                              trailing: Text(
+                                "${exp.timestamp.day}/${exp.timestamp.month}/${exp.timestamp.year}",
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          );
+                        } else {
+                          return const Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                      },
+                    );
+                  }
+
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
